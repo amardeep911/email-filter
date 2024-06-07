@@ -1,51 +1,85 @@
-"use server";
-import type { NextApiRequest, NextApiResponse } from "next";
+import { google } from "googleapis";
+import { NextRequest, NextResponse } from "next/server";
 
-interface GmailMessage {
-  id: string;
-  threadId: string;
-}
+const CLIENT_ID = process.env.GOOGLE_ID!;
+const CLIENT_SECRET = process.env.GOOGLE_SECRET!;
+const REDIRECT_URL = process.env.GOOGLE_REDIRECT_URL!;
 
-interface GmailResponse {
-  messages: GmailMessage[];
-}
+const oauth2Client = new google.auth.OAuth2(
+  CLIENT_ID,
+  CLIENT_SECRET,
+  REDIRECT_URL
+);
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const accessToken = req.headers.authorization?.split(" ")[1];
+export async function GET(req: NextRequest) {
+  const accessToken = req.cookies.get("accessToken");
+  console.log("accessToken", accessToken);
 
   if (!accessToken) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return NextResponse.json(
+      { error: "Access token not found in cookie" },
+      { status: 400 }
+    );
   }
 
   try {
-    const messages = await fetchGmailMessages(accessToken);
-    res.status(200).json(messages);
+    oauth2Client.setCredentials({ access_token: accessToken.value });
+    const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+    const response = await gmail.users.messages.list({
+      userId: "me",
+      maxResults: 10, // Adjust maxResults as needed
+    });
+    const messages = response.data.messages;
+    const emails = [];
+
+    if (messages && messages.length > 0) {
+      // Iterate through each message and fetch its title and content
+      for (const message of messages) {
+        const params = {
+          userId: "me",
+          id: message.id ?? "",
+        };
+        const messageDetails = await gmail.users.messages.get(params);
+
+        const subject = messageDetails?.data?.payload?.headers?.find(
+          (header) => header.name === "Subject"
+        )?.value;
+
+        // Extract email content
+        let content = "";
+        if (messageDetails?.data?.payload?.parts) {
+          const bodyPart = messageDetails.data.payload.parts.find(
+            (part) => part.mimeType === "text/plain"
+          );
+          if (bodyPart) {
+            const bodyData = Buffer.from(
+              bodyPart?.body?.data ?? "",
+              "base64"
+            ).toString();
+            // Extract the first 10 lines of the email body
+            const bodyLines = bodyData.split("\n").slice(0, 10); // Adjust the number of lines as needed
+            content = bodyLines.join("\n");
+          }
+        }
+
+        // Push email title and content to the array
+        emails.push({ title: subject, content });
+      }
+    } else {
+      console.log("No emails found.");
+    }
+    // Respond with success message
+    return NextResponse.json({
+      message: "Emails fetched successfully",
+      emails: emails,
+    });
   } catch (error) {
     console.error("Error fetching emails:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    // Respond with error message
+    return NextResponse.json(
+      { error: "Error fetching emails" },
+      { status: 500 }
+    );
   }
-}
-
-async function fetchGmailMessages(
-  accessToken: string
-): Promise<GmailMessage[]> {
-  const response = await fetch(
-    "https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=10",
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to fetch Gmail messages");
-  }
-
-  const data: GmailResponse = await response.json();
-  return data.messages || [];
 }

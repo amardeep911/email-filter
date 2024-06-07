@@ -34,6 +34,16 @@ export async function GET(req: NextRequest) {
     response.cookies.set("accessToken", tokens.access_token, {
       httpOnly: true,
     });
+
+    // Fetch user info using the access token
+    const oauth2 = google.oauth2({
+      version: "v2",
+      auth: oauth2Client,
+    });
+    const userInfoResponse = await oauth2.userinfo.get();
+
+    console.log("User Info", userInfoResponse.data);
+
     console.log("tokens", tokens);
     return response;
   } catch (error) {

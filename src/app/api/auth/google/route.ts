@@ -12,7 +12,10 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // Add the Gmail scopes here.
-const scopes = ["https://www.googleapis.com/auth/gmail.readonly"];
+const scopes = [
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/userinfo.profile",
+];
 
 export async function GET(req: NextRequest) {
   const url = oauth2Client.generateAuthUrl({

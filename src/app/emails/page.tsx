@@ -26,7 +26,7 @@ const Page = () => {
 
   const fetchEmails = async () => {
     try {
-      const res = await fetch("/api/fetchEmails", {
+      const res = await fetch("/api/messages", {
         headers: {
           Authorization: `Bearer ${YOUR_ACCESS_TOKEN}`, // Replace with your method of getting the access token
         },
