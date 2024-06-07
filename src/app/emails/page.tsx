@@ -5,9 +5,11 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar/Navbar";
 import axios from "axios";
+import Card from "@/components/Card/Card";
+import MaxWidthWrapper from "@/components/MaxWidthWrapper";
 interface GmailMessage {
-  id: string;
-  threadId: string;
+  title: string;
+  content: string;
 }
 
 const Page = () => {
@@ -15,6 +17,7 @@ const Page = () => {
   const [isKeyExists, setIsKeyExists] = useState<boolean>(false);
   const [key, setKey] = useState<string>("");
   const [YOUR_ACCESS_TOKEN, setYOUR_ACCESS_TOKEN] = useState<string>("");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const handleSaveKey = (enteredKey: string) => {
     localStorage.setItem("openApiKey", enteredKey);
@@ -25,24 +28,25 @@ const Page = () => {
   //fetch the access token from localstorage
 
   const fetchEmails = async () => {
+    setIsLoading(true);
     try {
-      const res = await fetch("/api/messages", {
+      const res = await axios.get("/api/messages", {
         headers: {
-          Authorization: `Bearer ${YOUR_ACCESS_TOKEN}`, // Replace with your method of getting the access token
+          Authorization: `Bearer ${YOUR_ACCESS_TOKEN}`,
         },
       });
-
-      if (!res.ok) {
+      if (res.status !== 200) {
         throw new Error("Failed to fetch emails");
       }
-
-      const data: GmailMessage[] = await res.json();
-      setEmails(data);
+      console.log("res", res);
+      setEmails(res.data.emails);
     } catch (error) {
       console.error("Error:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
-
+  console.log("emails", emails);
   return (
     <div className="w-screen h-screen ">
       {!isKeyExists ? (
@@ -69,13 +73,33 @@ const Page = () => {
           </DialogContent>
         </Dialog>
       ) : (
-        <>
+        <MaxWidthWrapper>
           <Navbar />
-          <div className="w-full h-full flex flex-col justify-center items-center">
-            <p>Dashboard</p>
-            <button onClick={fetchEmails}>Fetch Emails</button>
+          <button
+            onClick={() => {
+              fetchEmails();
+            }}
+            className="bg-blue-500 text-white p-2 rounded-md mt-2"
+            disabled={isLoading}
+          >
+            {isLoading ? "Fetching..." : "Fetch Emails"}
+          </button>
+
+          <div className="flex flex-col">
+            {isLoading ? (
+              <p>Loading...</p>
+            ) : (
+              emails.map((email, index) => (
+                <Card
+                  key={index}
+                  title={email?.title}
+                  body={email?.content}
+                  tag="Email"
+                />
+              ))
+            )}
           </div>
-        </>
+        </MaxWidthWrapper>
       )}
     </div>
   );
